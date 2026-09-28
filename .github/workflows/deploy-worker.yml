@@ -1,0 +1,197 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      notify_n8n:
+        description: Create or resend demo offer metadata to n8n.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-worker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      N8N_WEBHOOK_URL: ${{ secrets.N8N_DEMO_PUBLISHED_WEBHOOK_URL }}
+      N8N_WEBHOOK_SECRET: ${{ secrets.N8N_DEMO_PUBLISHED_SECRET }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+            echo "PACKAGE_MANAGER=npm" >> "$GITHUB_ENV"
+          elif [ -f pnpm-lock.yaml ]; then
+            corepack enable
+            pnpm install --frozen-lockfile
+            echo "PACKAGE_MANAGER=pnpm" >> "$GITHUB_ENV"
+          elif [ -f yarn.lock ]; then
+            corepack enable
+            yarn install --frozen-lockfile
+            echo "PACKAGE_MANAGER=yarn" >> "$GITHUB_ENV"
+          elif [ -f bun.lock ] || [ -f bun.lockb ]; then
+            npm install -g bun
+            bun install --frozen-lockfile
+            echo "PACKAGE_MANAGER=bun" >> "$GITHUB_ENV"
+          else
+            npm install
+            echo "PACKAGE_MANAGER=npm" >> "$GITHUB_ENV"
+          fi
+
+      - name: Type-check
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)"; then
+            case "$PACKAGE_MANAGER" in
+              npm) npm run lint ;;
+              pnpm) pnpm run lint ;;
+              yarn) yarn lint ;;
+              bun) bun run lint ;;
+            esac
+          else
+            echo "No lint script defined; skipping."
+          fi
+
+      - name: Build
+        run: |
+          case "$PACKAGE_MANAGER" in
+            npm) npm run build ;;
+            pnpm) pnpm run build ;;
+            yarn) yarn build ;;
+            bun) bun run build ;;
+          esac
+
+      - name: Read Worker name
+        run: |
+          WORKER_NAME="$(sed -n 's/^name *= *"\([^"]*\)".*/\1/p' wrangler.toml | head -n 1)"
+          if [ -z "$WORKER_NAME" ]; then
+            echo "Unable to read Worker name from wrangler.toml" >&2
+            exit 1
+          fi
+          echo "WORKER_NAME=$WORKER_NAME" >> "$GITHUB_ENV"
+
+      - name: Deploy to Cloudflare Workers
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          output="$(npx wrangler@4 deploy 2>&1 | tee /tmp/wrangler-deploy.log)"
+          deployment_url="$(printf '%s\n' "$output" | grep -Eo 'https://[^[:space:]]+\.workers\.dev' | tail -n 1 || true)"
+
+          if [ -z "$deployment_url" ]; then
+            echo "Unable to read deployment URL from Wrangler output" >&2
+            exit 1
+          fi
+
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Notify n8n
+        id: notify
+        if: ${{ env.N8N_WEBHOOK_URL != '' && env.N8N_WEBHOOK_SECRET != '' && hashFiles('estudio.demo.json') != '' && ((github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Publish ') && endsWith(github.event.head_commit.message, ' demo')) || (github.event_name == 'workflow_dispatch' && inputs.notify_n8n)) }}
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          async function main() {
+            const metadata = fs.existsSync('estudio.demo.json')
+              ? JSON.parse(fs.readFileSync('estudio.demo.json', 'utf8'))
+              : null;
+
+            const payload = {
+              event: 'worker_deployed',
+              worker_name: process.env.WORKER_NAME,
+              repository: process.env.REPOSITORY,
+              repository_name: process.env.REPOSITORY_NAME,
+              commit_sha: process.env.COMMIT_SHA,
+              run_id: process.env.RUN_ID,
+              run_attempt: process.env.RUN_ATTEMPT,
+              deployment_url: process.env.DEPLOYMENT_URL || null,
+              metadata,
+            };
+
+            const response = await fetch(process.env.N8N_WEBHOOK_URL, {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'x-estudio-webhook-secret': process.env.N8N_WEBHOOK_SECRET,
+              },
+              body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+              const body = await response.text();
+              throw new Error(`n8n webhook failed ${response.status}: ${body.slice(0, 500)}`);
+            }
+
+            const result = await response.json();
+            const demoUrl = result.demo_url || payload.deployment_url;
+            const offerUrl = 'https://www.estudio.bg/offer';
+            console.log(`Demo: ${demoUrl}`);
+            console.log(`Offer: ${offerUrl}`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `offer_url=${offerUrl}\n`);
+
+            const summary = [
+              '## Estudio demo published',
+              '',
+              `- Demo: ${demoUrl}`,
+              `- Offer: ${offerUrl}`,
+              `- Repository: ${payload.repository}`,
+              `- Worker: ${payload.worker_name}`,
+            ].filter(Boolean).join('\n');
+
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Add demo offer CTA
+        if: ${{ steps.notify.outputs.offer_url != '' }}
+        env:
+          OFFER_URL: ${{ steps.notify.outputs.offer_url }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const offerUrl = process.env.OFFER_URL || '';
+          fs.mkdirSync('worker', { recursive: true });
+          fs.writeFileSync('worker/estudio-offer-data.js', `export const ESTUDIO_OFFER_URL = ${JSON.stringify(offerUrl)};\n`);
+          NODE
+
+      - name: Redeploy with offer CTA
+        if: ${{ steps.notify.outputs.offer_url != '' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler@4 deploy

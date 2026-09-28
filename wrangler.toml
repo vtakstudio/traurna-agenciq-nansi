@@ -1,0 +1,9 @@
+name = "traurna-agenciq-nansi"
+main = "worker/index.js"
+compatibility_date = "2026-06-04"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+run_worker_first = true
+not_found_handling = "single-page-application"

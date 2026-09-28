@@ -1,0 +1,13 @@
+{
+  "client_name": "Traurna Agentsiya Nansi",
+  "client_slug": "traurna-agentsiya-nansi",
+  "industry": null,
+  "github_org": "vtakstudio",
+  "repo_name": "traurna-agenciq-nansi",
+  "worker_name": "traurna-agenciq-nansi",
+  "pricing_preset": "website-49",
+  "stripe_environment": "live",
+  "twenty_opportunity_id": "59c3589c-396b-4f11-b548-839ad70a1837",
+  "created_at": "2026-09-28T11:59:28.510Z",
+  "source_tool": "estudio publish"
+}
