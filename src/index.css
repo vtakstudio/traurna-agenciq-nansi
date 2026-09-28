@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-heading: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+  --color-warm-white: #FAF9F6;
+  --color-soft-ivory: #F3F1EC;
+  --color-text-main: #252724;
+  --color-text-muted: #6D706A;
+  --color-sage-deep: #3E5148;
+  --color-sage-secondary: #75877D;
+  --color-sage-soft: #EDEFEB;
+  --color-border-warm: #DDDCD6;
+  --color-bronze-accent: #A28B69;
+}
+
+@layer base {
+  html, body, button, input, select, textarea {
+    font-family: var(--font-sans);
+    font-synthesis: none;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+    font-family: var(--font-sans);
+    color: var(--color-text-main);
+    background-color: var(--color-warm-white);
+    letter-spacing: -0.01em;
+    font-weight: 400;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+
+  p {
+    line-height: 1.65;
+  }
+}
+
+/* Warm, restrained palette: keep the light surfaces, shift accents from sage green to brown. */
+@layer utilities {
+  [class~="bg-[#3E5148]"],
+  [class~="bg-[#34483E]"],
+  [class~="bg-[#2C6348]"] {
+    background-color: #6a4b32 !important;
+  }
+
+  [class~="hover:bg-[#32423a]"]:hover,
+  [class~="hover:bg-[#283830]"]:hover,
+  [class~="hover:bg-[#23533C]"]:hover,
+  [class~="hover:bg-[#1B3D2B]"]:hover,
+  [class~="active:bg-[#32423a]"]:active,
+  [class~="active:bg-[#283830]"]:active,
+  [class~="active:bg-[#1A422F]"]:active {
+    background-color: #4f3725 !important;
+  }
+
+  [class~="text-[#3E5148]"],
+  [class~="text-[#34483E]"],
+  [class~="text-[#2C6348]"],
+  [class~="text-[#245039]"] {
+    color: #6a4b32 !important;
+  }
+
+  [class~="text-[#55695E]"],
+  [class~="text-[#75877D]"],
+  [class~="text-[#6E7B74]"] {
+    color: #836c55 !important;
+  }
+
+  [class~="hover:text-[#3E5148]"]:hover,
+  [class~="hover:text-[#34483E]"]:hover,
+  [class~="hover:text-[#2C6348]"]:hover,
+  [class~="hover:text-[#1C221E]"]:hover {
+    color: #4f3725 !important;
+  }
+
+  [class~="border-[#3E5148]"],
+  [class~="border-[#34483E]"],
+  [class~="border-emerald-400\/25"] {
+    border-color: #a78661 !important;
+  }
+
+  [class~="bg-[#EDEFEB]"],
+  [class~="bg-[#EAECE8]"],
+  [class~="bg-[#E4ECE7]"],
+  [class~="bg-[#EBF3ED]"] {
+    background-color: #efe7dc !important;
+  }
+
+  [class~="bg-[#F2F4F2]"],
+  [class~="bg-[#F5F4F0]"],
+  [class~="bg-[#F0F2EF]"] {
+    background-color: #f5f0e9 !important;
+  }
+
+  [class~="border-[#DDDCD6]"],
+  [class~="border-[#E0E2DE]"],
+  [class~="border-[#E2E0D8]"],
+  [class~="border-[#E4E2D8]"] {
+    border-color: #ded4c8 !important;
+  }
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF9F6;
+}
+::-webkit-scrollbar-thumb {
+  background: #DDDCD6;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #75877D;
+}
