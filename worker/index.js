@@ -99,8 +99,20 @@ const ESTUDIO_CTA_HTML = ESTUDIO_OFFER_URL ? `
 </style>
 ` : "";
 
+const SITE_OFFLINE = true;
+
 export default {
   async fetch(request, env) {
+    if (SITE_OFFLINE) {
+      return new Response("This demo is currently unavailable.", {
+        status: 410,
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "cache-control": "no-store",
+        },
+      });
+    }
+
     const url = new URL(request.url);
 
     if (url.pathname.startsWith("/api/")) {
